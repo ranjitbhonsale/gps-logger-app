@@ -44,15 +44,38 @@ class GoogleSheetsUploader {
                 jsonArray.put(obj)
             }
 
-            val body = jsonArray.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder()
-                .url(webAppUrl)
-                .post(body)
+            val jsonString = jsonArray.toString()
+
+            // 1. Send as form-data parameter `data` (avoiding CORS/preflight & auth issues with Apps Script)
+            val formBody = FormBody.Builder()
+                .add("data", jsonString)
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
+            val formRequest = Request.Builder()
+                .url(webAppUrl)
+                .post(formBody)
+                .build()
+
+            val isFormSuccess = client.newCall(formRequest).execute().use { response ->
+                response.isSuccessful || response.code == 302 || response.code == 301
+            }
+
+            if (isFormSuccess) {
+                return@withContext Result.success(Unit)
+            }
+
+            // 2. Fallback to raw json body if form submission returned non-200/302
+            val jsonBody = jsonString.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val jsonRequest = Request.Builder()
+                .url(webAppUrl)
+                .post(jsonBody)
+                .build()
+
+            client.newCall(jsonRequest).execute().use { response ->
+                if (response.isSuccessful || response.code == 302 || response.code == 301) {
                     Result.success(Unit)
+                } else if (response.code == 401) {
+                    Result.failure(Exception("HTTP 401: Please deploy Google Apps Script with 'Who has access' set to 'Anyone'"))
                 } else {
                     Result.failure(Exception("Upload failed with HTTP code: ${response.code}"))
                 }
