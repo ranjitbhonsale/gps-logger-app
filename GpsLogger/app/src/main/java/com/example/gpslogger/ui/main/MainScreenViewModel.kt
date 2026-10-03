@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gpslogger.data.GoogleSheetsUploader
 import com.example.gpslogger.data.GpsLogEntry
+import com.example.gpslogger.data.GpsStatusDetails
 import com.example.gpslogger.data.LogStorage
 import com.example.gpslogger.service.LocationService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     val logs: StateFlow<List<GpsLogEntry>> = logStorage.logs
     val isLogging: StateFlow<Boolean> = LocationService.isLogging
+    val currentStatusDetails: StateFlow<GpsStatusDetails> = LocationService.currentStatusDetails
 
     private val _sheetUrl = MutableStateFlow(logStorage.getGoogleSheetUrl())
     val sheetUrl: StateFlow<String> = _sheetUrl.asStateFlow()

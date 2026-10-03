@@ -1,5 +1,6 @@
 package com.example.gpslogger.service
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,16 +9,19 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.GnssStatus
 import android.location.Location
+import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.example.gpslogger.MainActivity
-import com.example.gpslogger.R
 import com.example.gpslogger.data.GoogleSheetsUploader
 import com.example.gpslogger.data.GpsLogEntry
+import com.example.gpslogger.data.GpsStatusDetails
 import com.example.gpslogger.data.LogStorage
+import com.example.gpslogger.data.SatelliteInfo
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -42,7 +46,10 @@ class LocationService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationManager: LocationManager
     private lateinit var locationCallback: LocationCallback
+    private var gnssCallback: GnssStatus.Callback? = null
+
     private lateinit var logStorage: LogStorage
     private val uploader = GoogleSheetsUploader()
 
@@ -55,6 +62,9 @@ class LocationService : Service() {
         private val _isLogging = MutableStateFlow(false)
         val isLogging: StateFlow<Boolean> = _isLogging.asStateFlow()
 
+        private val _currentStatusDetails = MutableStateFlow(GpsStatusDetails())
+        val currentStatusDetails: StateFlow<GpsStatusDetails> = _currentStatusDetails.asStateFlow()
+
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
     }
@@ -63,11 +73,37 @@ class LocationService : Service() {
         super.onCreate()
         logStorage = LogStorage(applicationContext)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
                     processLocation(location)
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            gnssCallback = object : GnssStatus.Callback() {
+                override fun onSatelliteStatusChanged(status: GnssStatus) {
+                    val count = status.satelliteCount
+                    var usedInFix = 0
+                    val constellationSet = mutableSetOf<String>()
+
+                    for (i in 0 until count) {
+                        if (status.usedInFix(i)) {
+                            usedInFix++
+                        }
+                        constellationSet.add(getConstellationName(status.getConstellationType(i)))
+                    }
+
+                    val satInfo = SatelliteInfo(
+                        totalSatellites = count,
+                        satellitesInFix = usedInFix,
+                        constellations = if (constellationSet.isEmpty()) "None" else constellationSet.joinToString(", ")
+                    )
+
+                    _currentStatusDetails.value = _currentStatusDetails.value.copy(satellites = satInfo)
                 }
             }
         }
@@ -81,6 +117,7 @@ class LocationService : Service() {
         return START_STICKY
     }
 
+    @SuppressLint("MissingPermission")
     private fun startLogging() {
         if (_isLogging.value) return
 
@@ -109,6 +146,10 @@ class LocationService : Service() {
                 locationCallback,
                 Looper.getMainLooper()
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && gnssCallback != null) {
+                locationManager.registerGnssStatusCallback(gnssCallback!!, android.os.Handler(Looper.getMainLooper()))
+            }
         } catch (e: SecurityException) {
             e.printStackTrace()
             stopLogging()
@@ -117,6 +158,10 @@ class LocationService : Service() {
 
     private fun processLocation(location: Location) {
         val timeString = dateFormat.format(Date(location.time))
+        var vertAcc = 0.0f
+        var spdAcc = 0.0f
+        var brgAcc = 0.0f
+
         val rawDetails = buildString {
             append("Provider: ").append(location.provider).append("\n")
             append("Lat: ").append(location.latitude).append("\n")
@@ -126,12 +171,32 @@ class LocationService : Service() {
             append("Speed: ").append(location.speed).append(" m/s\n")
             append("Bearing: ").append(location.bearing).append(" deg\n")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                append("SpeedAcc: ").append(location.speedAccuracyMetersPerSecond).append(" m/s\n")
-                append("BearingAcc: ").append(location.bearingAccuracyDegrees).append(" deg\n")
-                append("VertAcc: ").append(location.verticalAccuracyMeters).append(" m\n")
+                spdAcc = location.speedAccuracyMetersPerSecond
+                brgAcc = location.bearingAccuracyDegrees
+                vertAcc = location.verticalAccuracyMeters
+                append("SpeedAcc: ").append(spdAcc).append(" m/s\n")
+                append("BearingAcc: ").append(brgAcc).append(" deg\n")
+                append("VertAcc: ").append(vertAcc).append(" m\n")
             }
-            append("Elapsed Realtime Nanos: ").append(location.elapsedRealtimeNanos)
+            append("Elapsed Realtime Nanos: ").append(location.elapsedRealtimeNanos).append("\n")
+            val sat = _currentStatusDetails.value.satellites
+            append("Satellites (Total/Fix): ").append(sat.totalSatellites).append("/").append(sat.satellitesInFix).append("\n")
+            append("Constellations: ").append(sat.constellations)
         }
+
+        // Update real-time status card
+        _currentStatusDetails.value = _currentStatusDetails.value.copy(
+            provider = location.provider ?: "GPS",
+            latitude = location.latitude,
+            longitude = location.longitude,
+            altitude = location.altitude,
+            accuracy = location.accuracy,
+            speed = location.speed,
+            bearing = location.bearing,
+            verticalAccuracy = vertAcc,
+            speedAccuracy = spdAcc,
+            bearingAccuracy = brgAcc
+        )
 
         val entry = GpsLogEntry(
             timestamp = timeString,
@@ -158,6 +223,9 @@ class LocationService : Service() {
     private fun stopLogging() {
         if (!_isLogging.value) return
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && gnssCallback != null) {
+            locationManager.unregisterGnssStatusCallback(gnssCallback!!)
+        }
         _isLogging.value = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -187,11 +255,24 @@ class LocationService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("GPS Logging Active")
-            .setContentText("Recording raw GPS coordinates and timestamp data...")
+            .setContentText("Recording raw GPS coordinates, satellites, and timestamp...")
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun getConstellationName(type: Int): String {
+        return when (type) {
+            GnssStatus.CONSTELLATION_GPS -> "GPS"
+            GnssStatus.CONSTELLATION_SBAS -> "SBAS"
+            GnssStatus.CONSTELLATION_GLONASS -> "GLONASS"
+            GnssStatus.CONSTELLATION_QZSS -> "QZSS"
+            GnssStatus.CONSTELLATION_BEIDOU -> "BEIDOU"
+            GnssStatus.CONSTELLATION_GALILEO -> "GALILEO"
+            GnssStatus.CONSTELLATION_IRNSS -> "NavIC/IRNSS"
+            else -> "Other($type)"
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
