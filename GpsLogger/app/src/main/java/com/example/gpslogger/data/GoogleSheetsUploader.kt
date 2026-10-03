@@ -14,8 +14,9 @@ import java.util.concurrent.TimeUnit
 class GoogleSheetsUploader {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
@@ -29,6 +30,24 @@ class GoogleSheetsUploader {
             return@withContext Result.failure(IllegalArgumentException("Google Script Web App URL is empty"))
         }
 
+        try {
+            // Batch process entries in chunks of 50 to prevent Google Apps Script execution timeouts
+            val chunkSize = 50
+            val chunks = entries.chunked(chunkSize)
+
+            for (chunk in chunks) {
+                val uploadResult = uploadChunk(webAppUrl, chunk)
+                if (uploadResult.isFailure) {
+                    return@withContext uploadResult
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun uploadChunk(webAppUrl: String, entries: List<GpsLogEntry>): Result<Unit> {
         try {
             val jsonArray = JSONArray()
             for (entry in entries) {
@@ -70,7 +89,7 @@ class GoogleSheetsUploader {
             }
 
             if (isFormSuccess) {
-                return@withContext Result.success(Unit)
+                return Result.success(Unit)
             }
 
             // 2. Fallback to raw json body if form submission returned non-200/302
@@ -80,7 +99,7 @@ class GoogleSheetsUploader {
                 .post(jsonBody)
                 .build()
 
-            client.newCall(jsonRequest).execute().use { response ->
+            return client.newCall(jsonRequest).execute().use { response ->
                 if (response.isSuccessful || response.code == 302 || response.code == 301) {
                     Result.success(Unit)
                 } else if (response.code == 401) {
@@ -90,7 +109,7 @@ class GoogleSheetsUploader {
                 }
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            return Result.failure(e)
         }
     }
 }
