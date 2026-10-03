@@ -29,11 +29,20 @@ class LogStorage(context: Context) {
                     GpsLogEntry(
                         id = obj.optLong("id", System.currentTimeMillis()),
                         timestamp = obj.getString("timestamp"),
+                        provider = obj.optString("provider", "gps"),
                         latitude = obj.getDouble("latitude"),
                         longitude = obj.getDouble("longitude"),
                         altitude = obj.optDouble("altitude", 0.0),
                         accuracy = obj.optDouble("accuracy", 0.0).toFloat(),
                         speed = obj.optDouble("speed", 0.0).toFloat(),
+                        bearing = obj.optDouble("bearing", 0.0).toFloat(),
+                        speedAccuracy = obj.optDouble("speedAccuracy", 0.0).toFloat(),
+                        bearingAccuracy = obj.optDouble("bearingAccuracy", 0.0).toFloat(),
+                        verticalAccuracy = obj.optDouble("verticalAccuracy", 0.0).toFloat(),
+                        elapsedRealtimeNanos = obj.optLong("elapsedRealtimeNanos", 0L),
+                        totalSatellites = obj.optInt("totalSatellites", 0),
+                        satellitesInFix = obj.optInt("satellitesInFix", 0),
+                        constellations = obj.optString("constellations", "None"),
                         rawDetails = obj.optString("rawDetails", "")
                     )
                 )
@@ -65,11 +74,20 @@ class LogStorage(context: Context) {
             val obj = JSONObject().apply {
                 put("id", entry.id)
                 put("timestamp", entry.timestamp)
+                put("provider", entry.provider)
                 put("latitude", entry.latitude)
                 put("longitude", entry.longitude)
                 put("altitude", entry.altitude)
                 put("accuracy", entry.accuracy.toDouble())
                 put("speed", entry.speed.toDouble())
+                put("bearing", entry.bearing.toDouble())
+                put("speedAccuracy", entry.speedAccuracy.toDouble())
+                put("bearingAccuracy", entry.bearingAccuracy.toDouble())
+                put("verticalAccuracy", entry.verticalAccuracy.toDouble())
+                put("elapsedRealtimeNanos", entry.elapsedRealtimeNanos)
+                put("totalSatellites", entry.totalSatellites)
+                put("satellitesInFix", entry.satellitesInFix)
+                put("constellations", entry.constellations)
                 put("rawDetails", entry.rawDetails)
             }
             jsonArray.put(obj)

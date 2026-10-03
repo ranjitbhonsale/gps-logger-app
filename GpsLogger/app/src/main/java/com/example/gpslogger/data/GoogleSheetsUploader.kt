@@ -34,11 +34,20 @@ class GoogleSheetsUploader {
             for (entry in entries) {
                 val obj = JSONObject().apply {
                     put("timestamp", entry.timestamp)
+                    put("provider", entry.provider)
                     put("latitude", entry.latitude)
                     put("longitude", entry.longitude)
                     put("altitude", entry.altitude)
                     put("accuracy", entry.accuracy)
                     put("speed", entry.speed)
+                    put("bearing", entry.bearing)
+                    put("speedAccuracy", entry.speedAccuracy)
+                    put("bearingAccuracy", entry.bearingAccuracy)
+                    put("verticalAccuracy", entry.verticalAccuracy)
+                    put("elapsedRealtimeNanos", entry.elapsedRealtimeNanos)
+                    put("totalSatellites", entry.totalSatellites)
+                    put("satellitesInFix", entry.satellitesInFix)
+                    put("constellations", entry.constellations)
                     put("rawDetails", entry.rawDetails)
                 }
                 jsonArray.put(obj)

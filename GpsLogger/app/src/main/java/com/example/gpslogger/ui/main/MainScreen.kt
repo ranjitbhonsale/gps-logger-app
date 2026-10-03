@@ -380,31 +380,51 @@ fun CollapsedLogCard(entry: GpsLogEntry) {
                 Column(modifier = Modifier.padding(top = 8.dp)) {
                     Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Altitude: ${entry.altitude} m | Speed: ${entry.speed} m/s",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
+                    
+                    // Column Grid of captured metrics
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
                                 MaterialTheme.colorScheme.surfaceVariant,
                                 shape = MaterialTheme.shapes.extraSmall
                             )
-                            .padding(8.dp)
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = entry.rawDetails,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp
-                        )
+                        MetricRow("Provider", entry.provider)
+                        MetricRow("Altitude", "${entry.altitude} m")
+                        MetricRow("Speed", "${entry.speed} m/s (Acc: ${entry.speedAccuracy} m/s)")
+                        MetricRow("Bearing", "${entry.bearing}° (Acc: ${entry.bearingAccuracy}°)")
+                        MetricRow("Vertical Acc", "${entry.verticalAccuracy} m")
+                        MetricRow("Satellites (Fix/Total)", "${entry.satellitesInFix} / ${entry.totalSatellites}")
+                        MetricRow("Constellations", entry.constellations)
+                        MetricRow("Elapsed Realtime Nanos", "${entry.elapsedRealtimeNanos}")
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun MetricRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

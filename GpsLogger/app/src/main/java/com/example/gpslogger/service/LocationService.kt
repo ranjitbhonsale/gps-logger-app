@@ -162,6 +162,14 @@ class LocationService : Service() {
         var spdAcc = 0.0f
         var brgAcc = 0.0f
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            spdAcc = location.speedAccuracyMetersPerSecond
+            brgAcc = location.bearingAccuracyDegrees
+            vertAcc = location.verticalAccuracyMeters
+        }
+
+        val sat = _currentStatusDetails.value.satellites
+
         val rawDetails = buildString {
             append("Provider: ").append(location.provider).append("\n")
             append("Lat: ").append(location.latitude).append("\n")
@@ -171,15 +179,11 @@ class LocationService : Service() {
             append("Speed: ").append(location.speed).append(" m/s\n")
             append("Bearing: ").append(location.bearing).append(" deg\n")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                spdAcc = location.speedAccuracyMetersPerSecond
-                brgAcc = location.bearingAccuracyDegrees
-                vertAcc = location.verticalAccuracyMeters
                 append("SpeedAcc: ").append(spdAcc).append(" m/s\n")
                 append("BearingAcc: ").append(brgAcc).append(" deg\n")
                 append("VertAcc: ").append(vertAcc).append(" m\n")
             }
             append("Elapsed Realtime Nanos: ").append(location.elapsedRealtimeNanos).append("\n")
-            val sat = _currentStatusDetails.value.satellites
             append("Satellites (Total/Fix): ").append(sat.totalSatellites).append("/").append(sat.satellitesInFix).append("\n")
             append("Constellations: ").append(sat.constellations)
         }
@@ -200,11 +204,20 @@ class LocationService : Service() {
 
         val entry = GpsLogEntry(
             timestamp = timeString,
+            provider = location.provider ?: "gps",
             latitude = location.latitude,
             longitude = location.longitude,
             altitude = location.altitude,
             accuracy = location.accuracy,
             speed = location.speed,
+            bearing = location.bearing,
+            speedAccuracy = spdAcc,
+            bearingAccuracy = brgAcc,
+            verticalAccuracy = vertAcc,
+            elapsedRealtimeNanos = location.elapsedRealtimeNanos,
+            totalSatellites = sat.totalSatellites,
+            satellitesInFix = sat.satellitesInFix,
+            constellations = sat.constellations,
             rawDetails = rawDetails
         )
 
