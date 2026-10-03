@@ -221,14 +221,16 @@ class LocationService : Service() {
             rawDetails = rawDetails
         )
 
-        // Store log locally
-        logStorage.addLog(entry)
+        // Store log locally (skips if duplicate timestamp)
+        val isAdded = logStorage.addLog(entry)
 
-        // If Google Sheet URL is set, auto sync new log entry
-        val sheetUrl = logStorage.getGoogleSheetUrl()
-        if (sheetUrl.isNotBlank()) {
-            serviceScope.launch {
-                uploader.uploadEntry(sheetUrl, entry)
+        // If newly added and Google Sheet URL is set, auto sync entry
+        if (isAdded) {
+            val sheetUrl = logStorage.getGoogleSheetUrl()
+            if (sheetUrl.isNotBlank()) {
+                serviceScope.launch {
+                    uploader.uploadEntry(sheetUrl, entry)
+                }
             }
         }
     }

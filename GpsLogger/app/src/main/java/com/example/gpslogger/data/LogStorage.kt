@@ -55,11 +55,16 @@ class LogStorage(context: Context) {
     }
 
     @Synchronized
-    fun addLog(entry: GpsLogEntry) {
+    fun addLog(entry: GpsLogEntry): Boolean {
         val currentList = _logs.value.toMutableList()
+        // Duplicate check using date and time stamp
+        if (currentList.any { it.timestamp == entry.timestamp }) {
+            return false
+        }
         currentList.add(0, entry) // Newest first
         _logs.value = currentList
         saveLogs(currentList)
+        return true
     }
 
     @Synchronized
