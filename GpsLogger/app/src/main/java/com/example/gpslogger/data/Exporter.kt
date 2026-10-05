@@ -32,17 +32,17 @@ object Exporter {
         return sb.toString()
     }
 
-    fun generateKml(logs: List<GpsLogEntry>): String {
+    fun generateKml(logs: List<GpsLogEntry>, maxPlacemarkPoints: Int = 1000): String {
         val sb = StringBuilder()
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
         sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n")
         sb.append("  <Document>\n")
         sb.append("    <name>GPS Raw Logger Export</name>\n")
-        sb.append("    <description>GPS Log Track with attribute callouts</description>\n")
+        sb.append("    <description>GPS Log Track path with attribute callouts</description>\n")
         
         sb.append("    <Style id=\"gpsPointStyle\">\n")
         sb.append("      <IconStyle>\n")
-        sb.append("        <scale>0.8</scale>\n")
+        sb.append("        <scale>0.7</scale>\n")
         sb.append("        <Icon>\n")
         sb.append("          <href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>\n")
         sb.append("        </Icon>\n")
@@ -51,36 +51,46 @@ object Exporter {
 
         sb.append("    <Style id=\"gpsLineStyle\">\n")
         sb.append("      <LineStyle>\n")
-        sb.append("        <color>ff0000ff</color>\n")
+        sb.append("        <color>ff0000ff</color>\n") // Red Line
         sb.append("        <width>4</width>\n")
         sb.append("      </LineStyle>\n")
         sb.append("    </Style>\n")
 
-        // 1. LineString track path
-        if (logs.isNotEmpty()) {
+        val reversedLogs = logs.reversed()
+
+        // 1. LineString track path with 100% FULL UN-DOWNSAMPLED resolution
+        if (reversedLogs.isNotEmpty()) {
             sb.append("    <Placemark>\n")
-            sb.append("      <name>GPS Track Path</name>\n")
+            sb.append("      <name>Full Track Line Path (${logs.size} points)</name>\n")
             sb.append("      <styleUrl>#gpsLineStyle</styleUrl>\n")
             sb.append("      <LineString>\n")
             sb.append("        <tessellate>1</tessellate>\n")
             sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
             sb.append("        <coordinates>\n")
-            val coords = logs.reversed().joinToString(" ") { "${it.longitude},${it.latitude},${it.altitude}" }
+            val coords = reversedLogs.joinToString(" ") { "${it.longitude},${it.latitude},${it.altitude}" }
             sb.append("          ").append(coords).append("\n")
             sb.append("        </coordinates>\n")
             sb.append("      </LineString>\n")
             sb.append("    </Placemark>\n")
         }
 
-        // 2. Individual Point Placemarks with ExtendedData AND HTML description bubble
-        for ((index, entry) in logs.reversed().withIndex()) {
+        // 2. Downsample point placemarks to avoid Google Earth 10,000 feature limit error
+        val step = if (reversedLogs.size > maxPlacemarkPoints) {
+            Math.ceil(reversedLogs.size.toDouble() / maxPlacemarkPoints).toInt()
+        } else {
+            1
+        }
+
+        for (i in reversedLogs.indices step step) {
+            val entry = reversedLogs[i]
+            val pointNumber = i + 1
             val safeTime = escapeXml(entry.timestamp)
             val safeConst = escapeXml(entry.constellations)
             val safeProv = escapeXml(entry.provider)
 
             val descHtml = buildString {
                 append("<div style=\"font-family:sans-serif;\">")
-                append("<h3>Point #").append(index + 1).append("</h3>")
+                append("<h3>Point #").append(pointNumber).append("</h3>")
                 append("<p><b>Time:</b> ").append(safeTime).append("</p>")
                 append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">")
                 append("<tr><td><b>Latitude</b></td><td>").append(entry.latitude).append("</td></tr>")
@@ -97,10 +107,9 @@ object Exporter {
             }.replace("]]>", "]]&gt;")
 
             sb.append("    <Placemark>\n")
-            sb.append("      <name>Point ").append(index + 1).append("</name>\n")
+            sb.append("      <name>Point ").append(pointNumber).append("</name>\n")
             sb.append("      <styleUrl>#gpsPointStyle</styleUrl>\n")
 
-            // ExtendedData elements for Google Earth Web/Mobile projects table view
             sb.append("      <ExtendedData>\n")
             sb.append("        <Data name=\"Timestamp\"><value>").append(safeTime).append("</value></Data>\n")
             sb.append("        <Data name=\"Latitude\"><value>").append(entry.latitude).append("</value></Data>\n")
