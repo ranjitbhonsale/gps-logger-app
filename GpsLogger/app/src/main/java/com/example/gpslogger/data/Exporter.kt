@@ -38,9 +38,8 @@ object Exporter {
         sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n")
         sb.append("  <Document>\n")
         sb.append("    <name>GPS Raw Logger Export</name>\n")
-        sb.append("    <description>GPS Log Track with detailed attribute callouts</description>\n")
+        sb.append("    <description>GPS Log Track with attribute callouts</description>\n")
         
-        // Define Placemark Style using standard https icon URL
         sb.append("    <Style id=\"gpsPointStyle\">\n")
         sb.append("      <IconStyle>\n")
         sb.append("        <scale>0.8</scale>\n")
@@ -48,14 +47,11 @@ object Exporter {
         sb.append("          <href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>\n")
         sb.append("        </Icon>\n")
         sb.append("      </IconStyle>\n")
-        sb.append("      <BalloonStyle>\n")
-        sb.append("        <text><![CDATA[$[description]]]></text>\n")
-        sb.append("      </BalloonStyle>\n")
         sb.append("    </Style>\n")
 
         sb.append("    <Style id=\"gpsLineStyle\">\n")
         sb.append("      <LineStyle>\n")
-        sb.append("        <color>ff0000ff</color>\n") // Opaque Red Line (AABBGGRR)
+        sb.append("        <color>ff0000ff</color>\n")
         sb.append("        <width>4</width>\n")
         sb.append("      </LineStyle>\n")
         sb.append("    </Style>\n")
@@ -69,67 +65,61 @@ object Exporter {
             sb.append("        <tessellate>1</tessellate>\n")
             sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
             sb.append("        <coordinates>\n")
-            for (entry in logs.reversed()) {
-                sb.append("          ${entry.longitude},${entry.latitude},${entry.altitude}\n")
-            }
+            val coords = logs.reversed().joinToString(" ") { "${it.longitude},${it.latitude},${it.altitude}" }
+            sb.append("          ").append(coords).append("\n")
             sb.append("        </coordinates>\n")
             sb.append("      </LineString>\n")
             sb.append("    </Placemark>\n")
         }
 
-        // 2. Individual Point Placemarks with ExtendedData and HTML Balloon
+        // 2. Individual Point Placemarks with HTML description bubble
         for ((index, entry) in logs.reversed().withIndex()) {
-            val safeTime = entry.timestamp.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            val safeConst = entry.constellations.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            val safeTime = escapeXml(entry.timestamp)
+            val safeConst = escapeXml(entry.constellations)
+            val safeProv = escapeXml(entry.provider)
 
             sb.append("    <Placemark>\n")
-            sb.append("      <name>Point #${index + 1}</name>\n")
+            sb.append("      <name>Point ").append(index + 1).append("</name>\n")
             sb.append("      <styleUrl>#gpsPointStyle</styleUrl>\n")
             
-            // Structured ExtendedData for GIS / Google Earth
-            sb.append("      <ExtendedData>\n")
-            sb.append("        <Data name=\"Timestamp\"><value>${safeTime}</value></Data>\n")
-            sb.append("        <Data name=\"Provider\"><value>${entry.provider}</value></Data>\n")
-            sb.append("        <Data name=\"Latitude\"><value>${entry.latitude}</value></Data>\n")
-            sb.append("        <Data name=\"Longitude\"><value>${entry.longitude}</value></Data>\n")
-            sb.append("        <Data name=\"Altitude (m)\"><value>${entry.altitude}</value></Data>\n")
-            sb.append("        <Data name=\"Accuracy (m)\"><value>${entry.accuracy}</value></Data>\n")
-            sb.append("        <Data name=\"Speed (m/s)\"><value>${entry.speed}</value></Data>\n")
-            sb.append("        <Data name=\"Bearing (deg)\"><value>${entry.bearing}</value></Data>\n")
-            sb.append("        <Data name=\"Satellites Fix/Total\"><value>${entry.satellitesInFix}/${entry.totalSatellites}</value></Data>\n")
-            sb.append("        <Data name=\"Constellations\"><value>${safeConst}</value></Data>\n")
-            sb.append("      </ExtendedData>\n")
-
-            // HTML Display Bubble Description
-            sb.append("      <description><![CDATA[\n")
-            sb.append("        <div style=\"font-family:sans-serif;\">\n")
-            sb.append("          <h3>Point #${index + 1}</h3>\n")
-            sb.append("          <p><b>Time:</b> ${safeTime}</p>\n")
-            sb.append("          <table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">\n")
-            sb.append("            <tr><td><b>Latitude</b></td><td>${entry.latitude}</td></tr>\n")
-            sb.append("            <tr><td><b>Longitude</b></td><td>${entry.longitude}</td></tr>\n")
-            sb.append("            <tr><td><b>Altitude</b></td><td>${entry.altitude} m</td></tr>\n")
-            sb.append("            <tr><td><b>Accuracy</b></td><td>${entry.accuracy} m</td></tr>\n")
-            sb.append("            <tr><td><b>Speed</b></td><td>${entry.speed} m/s (Acc: ${entry.speedAccuracy} m/s)</td></tr>\n")
-            sb.append("            <tr><td><b>Bearing</b></td><td>${entry.bearing}&deg; (Acc: ${entry.bearingAccuracy}&deg;)</td></tr>\n")
-            sb.append("            <tr><td><b>Vertical Accuracy</b></td><td>${entry.verticalAccuracy} m</td></tr>\n")
-            sb.append("            <tr><td><b>Provider</b></td><td>${entry.provider}</td></tr>\n")
-            sb.append("            <tr><td><b>Satellites (Fix/Total)</b></td><td>${entry.satellitesInFix} / ${entry.totalSatellites}</td></tr>\n")
-            sb.append("            <tr><td><b>Constellations</b></td><td>${safeConst}</td></tr>\n")
-            sb.append("          </table>\n")
-            sb.append("        </div>\n")
-            sb.append("      ]]></description>\n")
+            // HTML Description Bubble
+            sb.append("      <description><![CDATA[")
+            sb.append("<div style=\"font-family:sans-serif;\">")
+            sb.append("<h3>Point #").append(index + 1).append("</h3>")
+            sb.append("<p><b>Time:</b> ").append(safeTime).append("</p>")
+            sb.append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">")
+            sb.append("<tr><td><b>Latitude</b></td><td>").append(entry.latitude).append("</td></tr>")
+            sb.append("<tr><td><b>Longitude</b></td><td>").append(entry.longitude).append("</td></tr>")
+            sb.append("<tr><td><b>Altitude</b></td><td>").append(entry.altitude).append(" m</td></tr>")
+            sb.append("<tr><td><b>Accuracy</b></td><td>").append(entry.accuracy).append(" m</td></tr>")
+            sb.append("<tr><td><b>Speed</b></td><td>").append(entry.speed).append(" m/s</td></tr>")
+            sb.append("<tr><td><b>Bearing</b></td><td>").append(entry.bearing).append("&deg;</td></tr>")
+            sb.append("<tr><td><b>Provider</b></td><td>").append(safeProv).append("</td></tr>")
+            sb.append("<tr><td><b>Satellites (Fix/Total)</b></td><td>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</td></tr>")
+            sb.append("<tr><td><b>Constellations</b></td><td>").append(safeConst).append("</td></tr>")
+            sb.append("</table>")
+            sb.append("</div>")
+            sb.append("]]></description>\n")
             
             sb.append("      <Point>\n")
             sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
-            sb.append("        <coordinates>${entry.longitude},${entry.latitude},${entry.altitude}</coordinates>\n")
+            sb.append("        <coordinates>").append(entry.longitude).append(",").append(entry.latitude).append(",").append(entry.altitude).append("</coordinates>\n")
             sb.append("      </Point>\n")
             sb.append("    </Placemark>\n")
         }
 
         sb.append("  </Document>\n")
-        sb.append("</kml>")
+        sb.append("</kml>\n")
         return sb.toString()
+    }
+
+    private fun escapeXml(input: String): String {
+        return input
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
     }
 
     fun shareFile(context: Context, fileName: String, content: String, mimeType: String) {
