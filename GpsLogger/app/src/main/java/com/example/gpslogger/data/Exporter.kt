@@ -72,35 +72,49 @@ object Exporter {
             sb.append("    </Placemark>\n")
         }
 
-        // 2. Individual Point Placemarks with HTML description bubble
+        // 2. Individual Point Placemarks with ExtendedData AND HTML description bubble
         for ((index, entry) in logs.reversed().withIndex()) {
             val safeTime = escapeXml(entry.timestamp)
             val safeConst = escapeXml(entry.constellations)
             val safeProv = escapeXml(entry.provider)
 
+            val descHtml = buildString {
+                append("<div style=\"font-family:sans-serif;\">")
+                append("<h3>Point #").append(index + 1).append("</h3>")
+                append("<p><b>Time:</b> ").append(safeTime).append("</p>")
+                append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">")
+                append("<tr><td><b>Latitude</b></td><td>").append(entry.latitude).append("</td></tr>")
+                append("<tr><td><b>Longitude</b></td><td>").append(entry.longitude).append("</td></tr>")
+                append("<tr><td><b>Altitude</b></td><td>").append(entry.altitude).append(" m</td></tr>")
+                append("<tr><td><b>Accuracy</b></td><td>").append(entry.accuracy).append(" m</td></tr>")
+                append("<tr><td><b>Speed</b></td><td>").append(entry.speed).append(" m/s</td></tr>")
+                append("<tr><td><b>Bearing</b></td><td>").append(entry.bearing).append(" deg</td></tr>")
+                append("<tr><td><b>Provider</b></td><td>").append(safeProv).append("</td></tr>")
+                append("<tr><td><b>Satellites (Fix/Total)</b></td><td>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</td></tr>")
+                append("<tr><td><b>Constellations</b></td><td>").append(safeConst).append("</td></tr>")
+                append("</table>")
+                append("</div>")
+            }.replace("]]>", "]]&gt;")
+
             sb.append("    <Placemark>\n")
             sb.append("      <name>Point ").append(index + 1).append("</name>\n")
             sb.append("      <styleUrl>#gpsPointStyle</styleUrl>\n")
-            
-            // HTML Description Bubble
-            sb.append("      <description><![CDATA[")
-            sb.append("<div style=\"font-family:sans-serif;\">")
-            sb.append("<h3>Point #").append(index + 1).append("</h3>")
-            sb.append("<p><b>Time:</b> ").append(safeTime).append("</p>")
-            sb.append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">")
-            sb.append("<tr><td><b>Latitude</b></td><td>").append(entry.latitude).append("</td></tr>")
-            sb.append("<tr><td><b>Longitude</b></td><td>").append(entry.longitude).append("</td></tr>")
-            sb.append("<tr><td><b>Altitude</b></td><td>").append(entry.altitude).append(" m</td></tr>")
-            sb.append("<tr><td><b>Accuracy</b></td><td>").append(entry.accuracy).append(" m</td></tr>")
-            sb.append("<tr><td><b>Speed</b></td><td>").append(entry.speed).append(" m/s</td></tr>")
-            sb.append("<tr><td><b>Bearing</b></td><td>").append(entry.bearing).append("&deg;</td></tr>")
-            sb.append("<tr><td><b>Provider</b></td><td>").append(safeProv).append("</td></tr>")
-            sb.append("<tr><td><b>Satellites (Fix/Total)</b></td><td>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</td></tr>")
-            sb.append("<tr><td><b>Constellations</b></td><td>").append(safeConst).append("</td></tr>")
-            sb.append("</table>")
-            sb.append("</div>")
-            sb.append("]]></description>\n")
-            
+
+            // ExtendedData elements for Google Earth Web/Mobile projects table view
+            sb.append("      <ExtendedData>\n")
+            sb.append("        <Data name=\"Timestamp\"><value>").append(safeTime).append("</value></Data>\n")
+            sb.append("        <Data name=\"Latitude\"><value>").append(entry.latitude).append("</value></Data>\n")
+            sb.append("        <Data name=\"Longitude\"><value>").append(entry.longitude).append("</value></Data>\n")
+            sb.append("        <Data name=\"Altitude (m)\"><value>").append(entry.altitude).append("</value></Data>\n")
+            sb.append("        <Data name=\"Accuracy (m)\"><value>").append(entry.accuracy).append("</value></Data>\n")
+            sb.append("        <Data name=\"Speed (m/s)\"><value>").append(entry.speed).append("</value></Data>\n")
+            sb.append("        <Data name=\"Bearing (deg)\"><value>").append(entry.bearing).append("</value></Data>\n")
+            sb.append("        <Data name=\"Provider\"><value>").append(safeProv).append("</value></Data>\n")
+            sb.append("        <Data name=\"Satellites Fix/Total\"><value>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</value></Data>\n")
+            sb.append("        <Data name=\"Constellations\"><value>").append(safeConst).append("</value></Data>\n")
+            sb.append("      </ExtendedData>\n")
+
+            sb.append("      <description><![CDATA[").append(descHtml).append("]]></description>\n")
             sb.append("      <Point>\n")
             sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
             sb.append("        <coordinates>").append(entry.longitude).append(",").append(entry.latitude).append(",").append(entry.altitude).append("</coordinates>\n")
