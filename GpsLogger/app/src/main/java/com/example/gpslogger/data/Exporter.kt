@@ -40,25 +40,22 @@ object Exporter {
         sb.append("    <name>GPS Raw Logger Export</name>\n")
         sb.append("    <description>GPS Log Track with detailed attribute callouts</description>\n")
         
-        // Define Placemark Style
+        // Define Placemark Style using standard https icon URL
         sb.append("    <Style id=\"gpsPointStyle\">\n")
         sb.append("      <IconStyle>\n")
         sb.append("        <scale>0.8</scale>\n")
         sb.append("        <Icon>\n")
-        sb.append("          <href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>\n")
+        sb.append("          <href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>\n")
         sb.append("        </Icon>\n")
         sb.append("      </IconStyle>\n")
         sb.append("      <BalloonStyle>\n")
-        sb.append("        <text><![CDATA[\n")
-        sb.append("          <h3>$[name]</h3>\n")
-        sb.append("          <div>$[description]</div>\n")
-        sb.append("        ]]></text>\n")
+        sb.append("        <text><![CDATA[$[description]]]></text>\n")
         sb.append("      </BalloonStyle>\n")
         sb.append("    </Style>\n")
 
         sb.append("    <Style id=\"gpsLineStyle\">\n")
         sb.append("      <LineStyle>\n")
-        sb.append("        <color>ff0000ff</color>\n") // Red line
+        sb.append("        <color>ff0000ff</color>\n") // Opaque Red Line (AABBGGRR)
         sb.append("        <width>4</width>\n")
         sb.append("      </LineStyle>\n")
         sb.append("    </Style>\n")
@@ -69,11 +66,9 @@ object Exporter {
             sb.append("      <name>GPS Track Path</name>\n")
             sb.append("      <styleUrl>#gpsLineStyle</styleUrl>\n")
             sb.append("      <LineString>\n")
-            sb.append("        <extrude>1</extrude>\n")
             sb.append("        <tessellate>1</tessellate>\n")
-            sb.append("        <altitudeMode>absolute</altitudeMode>\n")
+            sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
             sb.append("        <coordinates>\n")
-            // Path points: KML coordinates are longitude,latitude,altitude
             for (entry in logs.reversed()) {
                 sb.append("          ${entry.longitude},${entry.latitude},${entry.altitude}\n")
             }
@@ -82,40 +77,58 @@ object Exporter {
             sb.append("    </Placemark>\n")
         }
 
-        // 2. Individual Point Placemarks with rich HTML Balloon Data
+        // 2. Individual Point Placemarks with ExtendedData and HTML Balloon
         for ((index, entry) in logs.reversed().withIndex()) {
+            val safeTime = entry.timestamp.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            val safeConst = entry.constellations.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
             sb.append("    <Placemark>\n")
-            sb.append("      <name>Point #${index + 1} - ${entry.timestamp}</name>\n")
+            sb.append("      <name>Point #${index + 1}</name>\n")
             sb.append("      <styleUrl>#gpsPointStyle</styleUrl>\n")
             
-            // HTML Callout / Display Bubble Content
+            // Structured ExtendedData for GIS / Google Earth
+            sb.append("      <ExtendedData>\n")
+            sb.append("        <Data name=\"Timestamp\"><value>${safeTime}</value></Data>\n")
+            sb.append("        <Data name=\"Provider\"><value>${entry.provider}</value></Data>\n")
+            sb.append("        <Data name=\"Latitude\"><value>${entry.latitude}</value></Data>\n")
+            sb.append("        <Data name=\"Longitude\"><value>${entry.longitude}</value></Data>\n")
+            sb.append("        <Data name=\"Altitude (m)\"><value>${entry.altitude}</value></Data>\n")
+            sb.append("        <Data name=\"Accuracy (m)\"><value>${entry.accuracy}</value></Data>\n")
+            sb.append("        <Data name=\"Speed (m/s)\"><value>${entry.speed}</value></Data>\n")
+            sb.append("        <Data name=\"Bearing (deg)\"><value>${entry.bearing}</value></Data>\n")
+            sb.append("        <Data name=\"Satellites Fix/Total\"><value>${entry.satellitesInFix}/${entry.totalSatellites}</value></Data>\n")
+            sb.append("        <Data name=\"Constellations\"><value>${safeConst}</value></Data>\n")
+            sb.append("      </ExtendedData>\n")
+
+            // HTML Display Bubble Description
             sb.append("      <description><![CDATA[\n")
-            sb.append("        <table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-family:sans-serif; font-size:12px;\">\n")
-            sb.append("          <tr bgcolor=\"#f0f0f0\"><th>Attribute</th><th>Value</th></tr>\n")
-            sb.append("          <tr><td><b>Timestamp</b></td><td>${entry.timestamp}</td></tr>\n")
-            sb.append("          <tr><td><b>Latitude</b></td><td>${entry.latitude}</td></tr>\n")
-            sb.append("          <tr><td><b>Longitude</b></td><td>${entry.longitude}</td></tr>\n")
-            sb.append("          <tr><td><b>Altitude</b></td><td>${entry.altitude} m</td></tr>\n")
-            sb.append("          <tr><td><b>Accuracy</b></td><td>${entry.accuracy} m</td></tr>\n")
-            sb.append("          <tr><td><b>Speed</b></td><td>${entry.speed} m/s (Acc: ${entry.speedAccuracy} m/s)</td></tr>\n")
-            sb.append("          <tr><td><b>Bearing</b></td><td>${entry.bearing}° (Acc: ${entry.bearingAccuracy}°)</td></tr>\n")
-            sb.append("          <tr><td><b>Vertical Accuracy</b></td><td>${entry.verticalAccuracy} m</td></tr>\n")
-            sb.append("          <tr><td><b>Provider</b></td><td>${entry.provider}</td></tr>\n")
-            sb.append("          <tr><td><b>Satellites (Fix/Total)</b></td><td>${entry.satellitesInFix} / ${entry.totalSatellites}</td></tr>\n")
-            sb.append("          <tr><td><b>Constellations</b></td><td>${entry.constellations}</td></tr>\n")
-            sb.append("          <tr><td><b>Elapsed Nanos</b></td><td>${entry.elapsedRealtimeNanos}</td></tr>\n")
-            sb.append("        </table>\n")
+            sb.append("        <div style=\"font-family:sans-serif;\">\n")
+            sb.append("          <h3>Point #${index + 1}</h3>\n")
+            sb.append("          <p><b>Time:</b> ${safeTime}</p>\n")
+            sb.append("          <table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">\n")
+            sb.append("            <tr><td><b>Latitude</b></td><td>${entry.latitude}</td></tr>\n")
+            sb.append("            <tr><td><b>Longitude</b></td><td>${entry.longitude}</td></tr>\n")
+            sb.append("            <tr><td><b>Altitude</b></td><td>${entry.altitude} m</td></tr>\n")
+            sb.append("            <tr><td><b>Accuracy</b></td><td>${entry.accuracy} m</td></tr>\n")
+            sb.append("            <tr><td><b>Speed</b></td><td>${entry.speed} m/s (Acc: ${entry.speedAccuracy} m/s)</td></tr>\n")
+            sb.append("            <tr><td><b>Bearing</b></td><td>${entry.bearing}&deg; (Acc: ${entry.bearingAccuracy}&deg;)</td></tr>\n")
+            sb.append("            <tr><td><b>Vertical Accuracy</b></td><td>${entry.verticalAccuracy} m</td></tr>\n")
+            sb.append("            <tr><td><b>Provider</b></td><td>${entry.provider}</td></tr>\n")
+            sb.append("            <tr><td><b>Satellites (Fix/Total)</b></td><td>${entry.satellitesInFix} / ${entry.totalSatellites}</td></tr>\n")
+            sb.append("            <tr><td><b>Constellations</b></td><td>${safeConst}</td></tr>\n")
+            sb.append("          </table>\n")
+            sb.append("        </div>\n")
             sb.append("      ]]></description>\n")
             
             sb.append("      <Point>\n")
-            sb.append("        <altitudeMode>absolute</altitudeMode>\n")
+            sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
             sb.append("        <coordinates>${entry.longitude},${entry.latitude},${entry.altitude}</coordinates>\n")
             sb.append("      </Point>\n")
             sb.append("    </Placemark>\n")
         }
 
         sb.append("  </Document>\n")
-        sb.append("</kml>\n")
+        sb.append("</kml>")
         return sb.toString()
     }
 
