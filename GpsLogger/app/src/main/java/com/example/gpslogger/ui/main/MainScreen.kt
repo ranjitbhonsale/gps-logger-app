@@ -28,9 +28,11 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SatelliteAlt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,6 +45,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -81,6 +84,7 @@ fun MainScreen(
     val uploadState by viewModel.uploadState.collectAsStateWithLifecycle()
 
     var showConfigDialog by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -121,6 +125,9 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("GPS Raw Logger", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = { showExportDialog = true }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export CSV / KML")
+                    }
                     IconButton(onClick = { showConfigDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "Google Sheet Setup")
                     }
@@ -231,6 +238,13 @@ fun MainScreen(
                 viewModel.updateSheetUrl(newUrl)
                 showConfigDialog = false
             }
+        )
+    }
+
+    if (showExportDialog) {
+        ExportOptionsDialog(
+            logs = logs,
+            onDismiss = { showExportDialog = false }
         )
     }
 }
@@ -426,6 +440,88 @@ fun MetricRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+@Composable
+fun ExportOptionsDialog(
+    logs: List<GpsLogEntry>,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export GPS Data") },
+        text = {
+            Column {
+                Text(
+                    text = "Select format to export ${logs.size} log entries:",
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // CSV Export Option
+                OutlinedButton(
+                    onClick = {
+                        if (logs.isEmpty()) {
+                            Toast.makeText(context, "No log entries to export", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val csvData = com.example.gpslogger.data.Exporter.generateCsv(logs)
+                            com.example.gpslogger.data.Exporter.shareFile(
+                                context,
+                                "gps_logs_${System.currentTimeMillis()}.csv",
+                                csvData,
+                                "text/csv"
+                            )
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.FileDownload, contentDescription = "CSV Export")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text("Export as CSV", fontWeight = FontWeight.Bold)
+                        Text("All metrics formatted in spreadsheet columns", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // KML Export Option
+                OutlinedButton(
+                    onClick = {
+                        if (logs.isEmpty()) {
+                            Toast.makeText(context, "No log entries to export", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val kmlData = com.example.gpslogger.data.Exporter.generateKml(logs)
+                            com.example.gpslogger.data.Exporter.shareFile(
+                                context,
+                                "gps_track_${System.currentTimeMillis()}.kml",
+                                kmlData,
+                                "application/vnd.google-earth.kml+xml"
+                            )
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "KML Export")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text("Export as KML (Google Earth)", fontWeight = FontWeight.Bold)
+                        Text("Tracks with rich popup display bubbles for all attributes", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
