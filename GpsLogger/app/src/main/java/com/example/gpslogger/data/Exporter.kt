@@ -145,6 +145,144 @@ object Exporter {
             .replace("'", "&apos;")
     }
 
+    fun generateKmlParts(logs: List<GpsLogEntry>, pointsPerPart: Int = 2000): List<Pair<String, String>> {
+        if (logs.isEmpty()) return emptyList()
+
+        val reversedLogs = logs.reversed()
+        val totalParts = Math.ceil(reversedLogs.size.toDouble() / pointsPerPart).toInt()
+        val resultParts = mutableListOf<Pair<String, String>>()
+        val timestampSuffix = System.currentTimeMillis()
+
+        for (partIndex in 0 until totalParts) {
+            val startIndex = partIndex * pointsPerPart
+            val endIndex = Math.min(startIndex + pointsPerPart, reversedLogs.size)
+            val chunk = reversedLogs.subList(startIndex, endIndex)
+            val partNum = partIndex + 1
+
+            val sb = StringBuilder()
+            sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+            sb.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n")
+            sb.append("  <Document>\n")
+            sb.append("    <name>GPS Track Part ${partNum} of ${totalParts}</name>\n")
+            sb.append("    <description>GPS Log Track Part ${partNum}/${totalParts} (Points ${startIndex + 1} to ${endIndex})</description>\n")
+            
+            sb.append("    <Style id=\"gpsPointStyle\">\n")
+            sb.append("      <IconStyle>\n")
+            sb.append("        <scale>0.7</scale>\n")
+            sb.append("        <Icon>\n")
+            sb.append("          <href>https://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href>\n")
+            sb.append("        </Icon>\n")
+            sb.append("      </IconStyle>\n")
+            sb.append("    </Style>\n")
+
+            sb.append("    <Style id=\"gpsLineStyle\">\n")
+            sb.append("      <LineStyle>\n")
+            sb.append("        <color>ff0000ff</color>\n")
+            sb.append("        <width>4</width>\n")
+            sb.append("      </LineStyle>\n")
+            sb.append("    </Style>\n")
+
+            // LineString track segment
+            sb.append("    <Placemark>\n")
+            sb.append("      <name>Track Segment ${partNum}</name>\n")
+            sb.append("      <styleUrl>#gpsLineStyle</styleUrl>\n")
+            sb.append("      <LineString>\n")
+            sb.append("        <tessellate>1</tessellate>\n")
+            sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
+            sb.append("        <coordinates>\n")
+            val coords = chunk.joinToString(" ") { "${it.longitude},${it.latitude},${it.altitude}" }
+            sb.append("          ").append(coords).append("\n")
+            sb.append("        </coordinates>\n")
+            sb.append("      </LineString>\n")
+            sb.append("    </Placemark>\n")
+
+            // Full 100% resolution placemarks for this chunk
+            for ((chunkIdx, entry) in chunk.withIndex()) {
+                val pointNumber = startIndex + chunkIdx + 1
+                val safeTime = escapeXml(entry.timestamp)
+                val safeConst = escapeXml(entry.constellations)
+                val safeProv = escapeXml(entry.provider)
+
+                val descHtml = buildString {
+                    append("<div style=\"font-family:sans-serif;\">")
+                    append("<h3>Point #").append(pointNumber).append("</h3>")
+                    append("<p><b>Time:</b> ").append(safeTime).append("</p>")
+                    append("<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\" style=\"border-collapse:collapse; font-size:12px;\">")
+                    append("<tr><td><b>Latitude</b></td><td>").append(entry.latitude).append("</td></tr>")
+                    append("<tr><td><b>Longitude</b></td><td>").append(entry.longitude).append("</td></tr>")
+                    append("<tr><td><b>Altitude</b></td><td>").append(entry.altitude).append(" m</td></tr>")
+                    append("<tr><td><b>Accuracy</b></td><td>").append(entry.accuracy).append(" m</td></tr>")
+                    append("<tr><td><b>Speed</b></td><td>").append(entry.speed).append(" m/s</td></tr>")
+                    append("<tr><td><b>Bearing</b></td><td>").append(entry.bearing).append(" deg</td></tr>")
+                    append("<tr><td><b>Provider</b></td><td>").append(safeProv).append("</td></tr>")
+                    append("<tr><td><b>Satellites (Fix/Total)</b></td><td>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</td></tr>")
+                    append("<tr><td><b>Constellations</b></td><td>").append(safeConst).append("</td></tr>")
+                    append("</table>")
+                    append("</div>")
+                }.replace("]]>", "]]&gt;")
+
+                sb.append("    <Placemark>\n")
+                sb.append("      <name>Point ").append(pointNumber).append("</name>\n")
+                sb.append("      <styleUrl>#gpsPointStyle</styleUrl>\n")
+                sb.append("      <ExtendedData>\n")
+                sb.append("        <Data name=\"Timestamp\"><value>").append(safeTime).append("</value></Data>\n")
+                sb.append("        <Data name=\"Latitude\"><value>").append(entry.latitude).append("</value></Data>\n")
+                sb.append("        <Data name=\"Longitude\"><value>").append(entry.longitude).append("</value></Data>\n")
+                sb.append("        <Data name=\"Altitude (m)\"><value>").append(entry.altitude).append("</value></Data>\n")
+                sb.append("        <Data name=\"Accuracy (m)\"><value>").append(entry.accuracy).append("</value></Data>\n")
+                sb.append("        <Data name=\"Speed (m/s)\"><value>").append(entry.speed).append("</value></Data>\n")
+                sb.append("        <Data name=\"Bearing (deg)\"><value>").append(entry.bearing).append("</value></Data>\n")
+                sb.append("        <Data name=\"Provider\"><value>").append(safeProv).append("</value></Data>\n")
+                sb.append("        <Data name=\"Satellites Fix/Total\"><value>").append(entry.satellitesInFix).append("/").append(entry.totalSatellites).append("</value></Data>\n")
+                sb.append("        <Data name=\"Constellations\"><value>").append(safeConst).append("</value></Data>\n")
+                sb.append("      </ExtendedData>\n")
+                sb.append("      <description><![CDATA[").append(descHtml).append("]]></description>\n")
+                sb.append("      <Point>\n")
+                sb.append("        <altitudeMode>clampToGround</altitudeMode>\n")
+                sb.append("        <coordinates>").append(entry.longitude).append(",").append(entry.latitude).append(",").append(entry.altitude).append("</coordinates>\n")
+                sb.append("      </Point>\n")
+                sb.append("    </Placemark>\n")
+            }
+
+            sb.append("  </Document>\n")
+            sb.append("</kml>\n")
+
+            val partFileName = "gps_track_part_${partNum}_of_${totalParts}_${timestampSuffix}.kml"
+            resultParts.add(Pair(partFileName, sb.toString()))
+        }
+
+        return resultParts
+    }
+
+    fun shareMultipleFiles(context: Context, filesList: List<Pair<String, String>>, mimeType: String) {
+        val exportDir = File(context.cacheDir, "exports")
+        if (!exportDir.exists()) {
+            exportDir.mkdirs()
+        }
+
+        val uris = ArrayList<android.net.Uri>()
+        for ((fileName, content) in filesList) {
+            val file = File(exportDir, fileName)
+            file.writeText(content)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            uris.add(uri)
+        }
+
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = mimeType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val chooser = Intent.createChooser(intent, "Export ${filesList.size} KML Split Parts")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    }
+
     fun shareFile(context: Context, fileName: String, content: String, mimeType: String) {
         val exportDir = File(context.cacheDir, "exports")
         if (!exportDir.exists()) {

@@ -488,7 +488,7 @@ fun ExportOptionsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // KML Export Option
+                // Single KML Export Option
                 OutlinedButton(
                     onClick = {
                         if (logs.isEmpty()) {
@@ -506,11 +506,39 @@ fun ExportOptionsDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = "KML Export")
+                    Icon(Icons.Default.Share, contentDescription = "KML Single Export")
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.Start) {
-                        Text("Export as KML (Google Earth)", fontWeight = FontWeight.Bold)
-                        Text("Tracks with rich popup display bubbles for all attributes", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Export Single KML File", fontWeight = FontWeight.Bold)
+                        Text("Single file with full track line & downsampled point callouts", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Multi-Part Split KML Export Option (100% Points)
+                OutlinedButton(
+                    onClick = {
+                        if (logs.isEmpty()) {
+                            Toast.makeText(context, "No log entries to export", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val kmlParts = com.example.gpslogger.data.Exporter.generateKmlParts(logs, pointsPerPart = 2000)
+                            com.example.gpslogger.data.Exporter.shareMultipleFiles(
+                                context,
+                                kmlParts,
+                                "application/vnd.google-earth.kml+xml"
+                            )
+                            Toast.makeText(context, "Exported ${kmlParts.size} KML split parts (2000 points each)", Toast.LENGTH_LONG).show()
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "KML Multi-Part Split Export")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Text("Export Split KML Parts (100% Points)", fontWeight = FontWeight.Bold)
+                        Text("Splits large logs into multiple KML files (2,000 points each) to import sequentially", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
